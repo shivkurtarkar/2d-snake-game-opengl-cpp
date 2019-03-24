@@ -1,0 +1,230 @@
+2D game in openGL
+
+OpenGL, you may have heard about it, something to do with graphics? If you feel so you are right. Its a graphics api and as its name says its open and all graphics cards supports it. OpenGL is quite complicated as compared to graphics.h lib that cpp provids, if you have used it. Especially the modern OpenGL which provids tons of features and why its so powerful. Today I would try to work with two of my favrite things in programing, c++ and opengl and hopefully inspire you to try this awsome api and build someting cool. 
+
+In this article i will try to give you gist of how to build atari breakout use modern (core-profile)
+
+#//OpenGL
+
+OpenGl is by itself a state machine a collection of variables that define how opengl should currently operate. the state of opengl is commonly referred to as the opengl context.we change  state by setting some options manipulating some buffers and then using the current context.
+
+OpenGLs core is written in C and is developed with many abstractions in mind. One of them is objects. OpenGL object is a collection of options that represents a subset of OpenGLs state. It could be visualized like following.
+
+struct object_name {
+    float  option1;
+    int    option2;
+    char[] name;
+};
+
+The state of OpenGL can be visualized as structure containg lots of object pointers as follows
+struct OpenGL_Context {
+  	...
+  	object_name* object_Window_Target;
+  	...  	
+};
+
+to create object we would use object gen function and store the object id.
+then we bind the object and set properties
+
+// create object
+unsigned int objectId = 0;
+glGenObject(1, &objectId);
+// bind object to context
+glBindObject(GL_WINDOW_TARGET, objectId);
+// set options of object currently bound to GL_WINDOW_TARGET
+glSetObjectOption(GL_WINDOW_TARGET, GL_OPTION_WINDOW_WIDTH, 800);
+glSetObjectOption(GL_WINDOW_TARGET, GL_OPTION_WINDOW_HEIGHT, 600);
+// set context target back to default
+glBindObject(GL_WINDOW_TARGET, 0);
+
+
+#//Opengl glfw /glunt
+To get statrted we need OpenGL context and an application window. Drawing a window is operating system specific work. We need to some way to handle createing window defining context and handling input. There are many popular libraries like GLUT, SDL, SFML and GLFW. We are going to use GLFW since its newer library.
+
+#//lib installation
+you can download it from thier webpage on https://www.glfw.org/download.html ther are prcompiled binaries and header files for visual studio for windows. but since i am on linux i will compile using using cmake. 
+
+Once you download source package extract it and open its contents in terminal. create a folder called build and enter the folder using `mkdir build; cd build` using cmake generate the solution since make file is in parent folder we run `cmake ..` and run `cmake install` to install the files
+
+for more on how to using cmake gui or if you are using IDE visit this page https://learnopengl.com/Getting-started/Creating-a-window
+
+#//linking
+we are going to use g++ compiler. to link libraries we add flags to g++ command -l followed by library name like `g++ filename.cpp -lglfw -lGL -lGLEW -lglm` for linking glfw, GL and GLEW 
+
+Since ther are many diffrent drivers that specific graphic card supports we need we need something that can retrive the location of functions. we will use glew to do this for us. Download at http://glew.sourceforge.net/
+
+we will later use glm for handling our matrix calculation Download at https://glm.g-truc.net/0.9.9/index.html
+
+
+
+#//window 
+
+#include<GL/glew.h>
+#include<GLFW/glfw3.h>
+#include<iostream>
+
+int main(){
+create varible for window and inititialize glfw
+	GLFWwindow* window;
+	if(!glfwInit())
+		return -1;
+	
+To draw window we need to are going to use opengl core profile by setting
+	
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+then we are going to create window and check if its created else will close the application.
+	window = glfwCreateWindow(640,640, "snake game",NULL, NULL);
+	if(!window){
+		glfwTerminate();
+		return -1;
+	}
+we are going to set window we just created as our context
+	glfwMakeContextCurrent(window);
+	//set other window properties
+	//...
+
+    to print opengl version loaded
+	std::cout<<glGetString(GL_VERSION)<<std::endl;
+
+	if(glewInit() != GLEW_OK)
+		std::cout<<"GLEW Error!"<<std::endl;	
+	to keep window alive till closed we run a while loop and in we would run all update code that need to be run every new draw call like 
+	{
+		while(!glfwWindowShouldClose(window)){
+            //..Rendering calls
+            
+			glfwSwapBuffers(window);
+			glfwPollEvents();
+		}
+
+	}
+	dont forget to destroy what you created
+	glfwTerminate();
+	return 0;
+}
+
+#//input
+to handle input we are going to set callback funciton using  
+glfwSetKeyCallback(window, key_callback);
+
+we need to define call back function 
+void key_callback(GLFWwindow* window, int key,int scancode, int action, int mods){
+//all input handling following checks if you pressed if you pressed esc key if so it will close window
+    if(key == GLFW_KEY_ESCAPE && action==GLFW_PRESS)
+    glfwSetWindowShouldClose(window,true);
+}
+you can also run it in while loop by as
+    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+
+        
+before we move to rendering we are going to set way to debug our code
+#define ASSERT(x) if(!(x)) std::cerr<<"Error "; 
+#define GLCall(x) GLClearError(); x;ASSERT(GLLogCall(#x, __FILE__, __LINE__))
+
+void GLClearError(){
+	while(glGetError() != GL_NO_ERROR);
+}
+bool GLLogCall(const char* function, const char* file, int line){
+	while(GLenum error = glGetError()){
+		std::cout<<"[OpenGL Error] (0x"<<std::hex <<error<<"): "
+			<<function<<" "<<file<<":"<< line <<std::endl;
+		return false;
+	}
+	return true;
+}
+
+encapsulate all gl call with GLCall to get error messages
+this checks for runtime errors after each gl command and prints line number for more refer youtube video Dealing with Errors in OpenGL from OpenGL playlist by TheChernoProject at https://youtu.be/FBbPWSOQ0-w
+
+
+#//shader
+In OpenGL everything is in 3D space. but on screen and window its 2D. OpenGLs graphics pipeline hence takes 3D coordinates as input, and teansforms these into 2D pixels. This task is divided into several steps. each step is highly speciallized. can be executed in parallel. this is done using small programs
+called shaders. shaders are written in OpenGL Shading Language (GLSL). 
+vertext data is collection of 3D point data, represented using vertex attributes that can contain any data like position or color value. 
+vertex shader takes input as 3D coordinates and transforms into diffrent 3D coordinates. vertex shaders allows us to do some basic processing on vertex attributes.
+geometry shader takes collection of vertices and generates shapes as primitives. 
+fragment shader calculates the final color of a pixel and this is usually the advaced OpenGL effects occur. it can calculate final pixel value.
+
+in most cases we need to build only vertex and fragment shader. and let other shaders default be used.
+for a vertex we need x,y,z coordinates. but since we are treating z as 0. we need to send this data to vertex shader. to do that we need to create memory on gpu to store data.and configure how OpenGL should interprete the data. we manage the data using vertex buffer objects that can store large number of vertices in GPUs memory. sending data to gpu is slow hence we try to bundle as much data as possible and send it all at once.
+data
+		float positions[] ={
+			//positions
+			 1.0f,  1.0f, //top right
+			 1.0f, -1.0f, //bottom right
+			-1.0f, -1.0f, //bottom left
+			-1.0f,  1.0f  //top left
+		};
+
+we create vertex buffer bind it and assign data.	
+
+		unsigned int buffer;
+		GLCall(glGenBuffers(1, &buffer));
+		GLCall(glBindBuffer(GL_ARRAY_BUFFER, buffer));
+glBufferData takes in mode, size in bytes since here we are storing 4 vertices each with 2 cordinate values of size of float. pointer to data and mode to tell useage pattern.
+    GL_STATIC_DRAW: the data will most likely not change at all or very rarely.
+    GL_DYNAMIC_DRAW: the data is likely to change a lot.
+    GL_STREAM_DRAW: the data will change every time it is drawn.
+		GLCall(glBufferData(GL_ARRAY_BUFFER, 4*2*sizeof(float), positions, GL_STATIC_DRAW));
+
+to draw a square we need to draw 2 triangles. since there will be repetition of vertices we use indexing. to save some memory.
+		unsigned int indices[]={
+			0, 1, 2,
+			2, 3, 0
+		};
+
+		unsigned int ibo;
+		GLCall(glGenBuffers(1, &ibo));
+		GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
+mode we set here is (GL_ELEMENT_ARRAY_BUFFER since its for indexing
+		GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6*sizeof(unsigned int), indices, 
+			GL_STATIC_DRAW));
+
+
+modern opengl requires that we at least set up a vertex and fragment shader. we need to write this shaders in GLSL(OpenGL Shading Language). GLSL looks very similar to c.
+vertex shader
+			#version 330 core
+			layout(location = 0) in vec4 position;
+			uniform mat4 u_MVP;
+			void main(){
+				gl_Position = u_MVP * position;
+			};
+
+shader begins with declaration of its version. we declare all the input vertex attribures in vertex shader with in keyword and output is specified using out keyword. GLSL has vector datatype vector of 4 values for postion. vector of 3 values can represent postion/direction in any space as x,y,z. 4th value w is used for perspective divison. since we are developing for 2d we will let z and w initialize to 0.
+we are specifically setting the location of input variable via location=0. when input and output of two shaders match they are passed along. vertex shader gets its input directly from vertex data hence we need to specify extra location metadata as layout (location = 0). we can also skip this and query for its location using glGetAttribLocation but we will stick to setting location metadata.
+
+uniform are way of passing data from our application on the cpu to the shader on gpu. Uniforms are global tht is they are unique per shader program object and can be acessed from any shader at any stage in shader program. After setting value it keeps their value until they're either reset or updated.
+
+gl_position is internal variable that is input for next shader in line in graphics pipeline of openGL.  
+and fragment shader
+			#version 330 core
+		        uniform vec4 u_color;
+			out vec4 color;
+			void main(){
+				//color = vec4(0.0, 0.0, 1.0, 1.0);
+		        	color = u_color;
+			};
+
+similarly it applies for fragment shader color needs to be outputed for next shader in line. since color is output of fragment shader we specify it using out keyword. output of fragment shader is sent to next step in graphics pipeline and finally it would be displayed on the screen. 
+we then create a shader object and compile the source.  And then attach and direct the program to use it.
+
+
+#//vao
+
+#//math
+To draw blocks at diffrent location we need to do some math. i previously mentioned about glm library that handles all matrix calculations of my project. to calculate the position of an model we do model view projection.vertex we use Model, View and Projection matrices and multiply them to get final vertex .
+
+using all of the above knowledge i build my very own snake game. I give random coordinates to fruit. for snake i start at center. i used queue to keep track of snakes body. I pop the queue everytime it exceeds the tail length. wrote a keyboard callback function to handle all input. And there you have it how i made game using opengl.
+find my source code in my git hub repository at link
+
+======/>
+Refrences
+In-depth basics, intermediate and all the advanced knowledge using modern (core-profile) OpenGL tutorials
+https://learnopengl.com/
+
+OpenGl and Game Engine Devlopment Tutorials
+https://www.youtube.com/user/TheChernoProject
