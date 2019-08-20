@@ -9,5 +9,5 @@ Snake game built using OpenGL in c++
 
 
 
-Better version and 
+Better version and <br>
 Medium Post cooming soon...
